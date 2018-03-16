@@ -55,6 +55,7 @@ function serverReplay(har, options) {
 }
 
 function chooseProtocol(options, connection) {
+    connection.on("error", handleProxyError);
     connection.once("data", function (buf) {
         var intent = buf.toString().split("\r\n")[0];
         var destPort = options.port + 1;
@@ -75,7 +76,15 @@ function chooseProtocol(options, connection) {
             bridgeConnection(buf, connection, destPort);
         }
     });
+}
 
+<<<<<<< HEAD
+=======
+function handleProxyError(err) {
+    console.warn("An error occurred while proxying:");
+    console.warn(err.stack);
+}
+>>>>>>> Gracefully handle connection reset errors on the proxy
 
 function bridgeConnection(buf, connection, destPort) {
     var proxy = net.createConnection(destPort, function () {
