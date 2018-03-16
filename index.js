@@ -15,7 +15,9 @@
  */
 
 var _fs = require("fs");
+var net = require("net");
 var http = require("http");
+var https = require("https");
 var URL = require("url");
 var PATH = require("path");
 var mime = require("mime");
@@ -31,8 +33,55 @@ function serverReplay(har, options) {
         console.debug("\n");
     }
     var server = http.createServer(makeRequestListener(har.log.entries, options));
+    var fs = options.fs || _fs;
+    if (!options.ssl) {
+        options.ssl = {
+            key: "./ssl/snakeoil.key",
+            cert: "./ssl/snakeoil.crt"
+        };
+    }
 
-    server.listen(options.port);
+    options.ssl.key = fs.readFileSync(options.ssl.key);
+    options.ssl.cert = fs.readFileSync(options.ssl.cert);
+
+    var rl = makeRequestListener(har.log.entries, options)
+    var internalProxy = net.createServer(chooseProtocol.bind(this, options));
+    var httpServer = http.createServer(rl);
+    var httpsServer = https.createServer(options.ssl, rl);
+
+    internalProxy.listen(options.port);
+    httpServer.listen(options.port + 1);
+    httpsServer.listen(options.port + 2);
+}
+
+function chooseProtocol(options, connection) {
+    connection.once("data", function (buf) {
+        var intent = buf.toString().split("\r\n")[0];
+        var destPort = options.port + 1;
+
+        if (/^CONNECT .+?:443 HTTP\/\d(?:\.\d)?$/.test(intent)) {
+            destPort += 1;
+            connection.write(
+                "HTTP/1.1 200 Connection established\r\n" +
+                "Connection: keep-alive\r\n" +
+                "Via: HTTP/1.1 server-replay\r\n" +
+                "\r\n"
+            );
+
+            connection.once("data", function (buf2) {
+                bridgeConnection(buf2, connection, destPort)
+            });
+        } else {
+            bridgeConnection(buf, connection, destPort)
+        }
+    });
+
+
+function bridgeConnection(buf, connection, destPort) {
+    var proxy = net.createConnection(destPort, function () {
+        proxy.write(buf);
+        connection.pipe(proxy).pipe(connection);
+    });
 }
 
 // Export for testing

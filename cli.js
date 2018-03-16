@@ -71,4 +71,4 @@ serverReplay(har, {
 });
 
 console.log("Listening at http://localhost:" + argv.port);
-console.log("Try " + har.log.entries[0].request.url.replace(/^https/, "http"));
+console.log("Try " + har.log.entries[0].request.url);
