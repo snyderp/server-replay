@@ -33,7 +33,7 @@ describe("readme", function () {
                     "match": {"var": "entry.request.parsedUrl.query.callback"},
                     "replace": {"var": "request.parsedUrl.query.callback"}
                 },
-                // Proxy only works over http
+                // Replace HTTPS with HTTP in page content
                 {"match": "https", "replace": "http"}
             ]
         }));
