@@ -44,7 +44,7 @@ function serverReplay(har, options) {
     options.ssl.key = fs.readFileSync(options.ssl.key);
     options.ssl.cert = fs.readFileSync(options.ssl.cert);
 
-    var rl = makeRequestListener(har.log.entries, options)
+    var rl = makeRequestListener(har.log.entries, options);
     var internalProxy = net.createServer(chooseProtocol.bind(this, options));
     var httpServer = http.createServer(rl);
     var httpsServer = https.createServer(options.ssl, rl);
@@ -69,10 +69,10 @@ function chooseProtocol(options, connection) {
             );
 
             connection.once("data", function (buf2) {
-                bridgeConnection(buf2, connection, destPort)
+                bridgeConnection(buf2, connection, destPort);
             });
         } else {
-            bridgeConnection(buf, connection, destPort)
+            bridgeConnection(buf, connection, destPort);
         }
     });
 
