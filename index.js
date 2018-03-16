@@ -36,8 +36,8 @@ function serverReplay(har, options) {
     var fs = options.fs || _fs;
     if (!options.ssl) {
         options.ssl = {
-            key: "./ssl/snakeoil.key",
-            cert: "./ssl/snakeoil.crt"
+            key: __dirname + "/ssl/snakeoil.key",
+            cert: __dirname + "/ssl/snakeoil.crt"
         };
     }
 
