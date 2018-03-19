@@ -36,18 +36,18 @@ function serverReplay(har, options) {
     var fs = options.fs || _fs;
     if (!options.ssl) {
         options.ssl = {
-            key: __dirname + "/ssl/snakeoil.key",
-            cert: __dirname + "/ssl/snakeoil.crt"
+            key: PATH.join(__dirname, "ssl", "snakeoil.key"),
+            cert: PATH.join(__dirname, "ssl", "snakeoil.crt")
         };
     }
 
     options.ssl.key = fs.readFileSync(options.ssl.key);
     options.ssl.cert = fs.readFileSync(options.ssl.cert);
 
-    var rl = makeRequestListener(har.log.entries, options);
+    var requestListener = makeRequestListener(har.log.entries, options);
     var internalProxy = net.createServer(chooseProtocol.bind(this, options));
-    var httpServer = http.createServer(rl);
-    var httpsServer = https.createServer(options.ssl, rl);
+    var httpServer = http.createServer(requestListener);
+    var httpsServer = https.createServer(options.ssl, requestListener);
 
     internalProxy.listen(options.port);
     httpServer.listen(options.port + 1);
