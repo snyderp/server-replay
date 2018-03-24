@@ -37,13 +37,15 @@ function makeRequestListener(entries, options) {
     // for mocking
     var fs = options.fs || _fs;
 
+    var heuristicGusser = heuristic.makeHeuristicGuesser(entries);
+
     return function (request, response) {
         if (debug) {
             console.log(request.method, request.url);
         }
         request.parsedUrl = URL.parse(request.url, true);
 
-        var entry = heuristic(entries, request);
+        var entry = heuristicGusser(request);
 
         var localPath;
         for (var i = 0; i < config.mappings.length; i++) {

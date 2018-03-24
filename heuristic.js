@@ -16,29 +16,6 @@
 
 var URL = require("url");
 
-module.exports = function (entries, request) {
-    var topPoints = 0;
-    var topEntry = null;
-
-    var entry;
-    for (var i = 0; i < entries.length; i++) {
-        entry = entries[i];
-        if (!entry.request.parsedUrl) {
-            entry.request.parsedUrl = URL.parse(entry.request.url, true);
-        }
-        if (!entry.request.indexedHeaders) {
-            entry.request.indexedHeaders = indexHeaders(entry.request.headers);
-        }
-        var points = rate(entry.request, request);
-        if (points > topPoints) {
-            topPoints = points;
-            topEntry = entry;
-        }
-    }
-
-    return topEntry;
-};
-
 function rate(entryRequest, request) {
     var points = 0;
     var name;
@@ -103,3 +80,59 @@ function indexHeaders(entryHeaders) {
     });
     return headers;
 }
+
+function bestEntryForRequestInCollection(request, entryCollection) {
+    var topPoints = 0;
+    var topEntry;
+    var topEntryIndex;
+    var i;
+
+    var entry;
+    var numEntries = entryCollection.length;
+    for (i = 0; i < numEntries; i++) {
+        entry = entryCollection[i];
+        if (!entry.request.parsedUrl) {
+            entry.request.parsedUrl = URL.parse(entry.request.url, true);
+        }
+        if (!entry.request.indexedHeaders) {
+            entry.request.indexedHeaders = indexHeaders(entry.request.headers);
+        }
+        var points = rate(entry.request, request);
+        if (points > topPoints) {
+            topPoints = points;
+            topEntry = entry;
+            topEntryIndex = i;
+        }
+    }
+
+    return [topEntry, topEntryIndex];
+};
+
+function makeHeuristicGuesser(entries) {
+    var unreturnedEntries = entries;
+    var returnedEntires = [];
+
+    return {
+        bestEntryForRequest: function (request) {
+
+            // First select the best un-returned match from the collection.
+            // If we can't find any matches in this collection, then use
+            // the best possible match from the collection of
+            // already returned entries.
+            var [bestEntry, bestEntryIndex] = bestEntryForRequestInCollection(request, unreturnedEntries);
+
+            if (bestEntry !== undefined) {
+                // Remove the now-being-returned entry from the "not-yet returned"
+                // array, and move it to the "has been returned" array.
+                unreturnedEntries.splice(bestEntryIndex, 1);
+                returnedEntires.push(bestEntry);
+                return bestEntry;
+            }
+
+            [bestEntry, bestEntryIndex] = bestEntryForRequestInCollection(request, returnedEntires);
+            return bestEntry;
+        },
+    };
+};
+
+module.exports.makeHeuristicGuesser = makeHeuristicGuesser;
