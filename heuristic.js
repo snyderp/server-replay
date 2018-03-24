@@ -16,9 +16,10 @@
 
 var URL = require("url");
 
-function rate(entryRequest, request) {
+function rate(maxTime, lastReturnedEntry, entry, request) {
     var points = 0;
     var name;
+    var entryRequest = entry.request;
 
     // method, host and pathname must match
     if (
@@ -61,6 +62,25 @@ function rate(entryRequest, request) {
         // TODO handle missing headers and adjust score appropriately
     }
 
+    // Favor entries that happened as soon as possible after the last
+    // entry that was returned.  Award [-1, 3] points: -1 if the
+    // considered entry occured before the request, and between [3, 0],
+    // linerally scaled, for how long after the request the occured
+    // (3 points for the entry being returned after the last response,
+    // and 0 points for being the furtherest away response in time).
+    // If we've never returned an entry, then ignore this check.
+    //
+    // @todo consider other scaling systems, this is a lot of guesses...
+    if (lastReturnedEntry !== undefined) {
+        if (entry.receivedTS < lastReturnedEntry.receivedTS) {
+            points -= 1;
+        } else {
+            var tsDiff = entry.receivedTS - lastReturnedEntry.receivedTS;
+            var tsDiffRange = maxTime - lastReturnedEntry.receivedTS;
+            points += (tsDiff / tsDiffRange) * 3;
+        }    
+    }
+    
     return points;
 }
 
@@ -81,25 +101,21 @@ function indexHeaders(entryHeaders) {
     return headers;
 }
 
-function bestEntryForRequestInCollection(request, entryCollection) {
+function bestEntryForRequestInCollection(maxTime, lastReturnedEntry, request, entryCollection) {
+    var rateBound = rate.bind(undefined, maxTime, lastReturnedEntry);
     var topPoints = 0;
     var topEntry;
     var topEntryIndex;
     var i;
+    var pointsForEntry;
 
     var entry;
     var numEntries = entryCollection.length;
     for (i = 0; i < numEntries; i++) {
         entry = entryCollection[i];
-        if (!entry.request.parsedUrl) {
-            entry.request.parsedUrl = URL.parse(entry.request.url, true);
-        }
-        if (!entry.request.indexedHeaders) {
-            entry.request.indexedHeaders = indexHeaders(entry.request.headers);
-        }
-        var points = rate(entry.request, request);
-        if (points > topPoints) {
-            topPoints = points;
+        pointsForEntry = rateBound(entry, request);
+        if (pointsForEntry > topPoints) {
+            topPoints = pointsForEntry;
             topEntry = entry;
             topEntryIndex = i;
         }
@@ -109,27 +125,72 @@ function bestEntryForRequestInCollection(request, entryCollection) {
 };
 
 function makeHeuristicGuesser(entries) {
-    var unreturnedEntries = entries;
+    // Preprocess all entries once, to make all future comparisons
+    // quicker.
+    var unreturnedEntries = entries.map(function (entry) {
+        entry.request.parsedUrl = URL.parse(entry.request.url, true);
+        entry.request.indexedHeaders = indexHeaders(entry.request.headers);
+        entry.receivedTS = Date.parse(entry.startedDateTime);
+        return entry;
+    });
+
+    var numEntries = unreturnedEntries.length;
+
+    // Track the last HAR entry that was returned.  Will be undefined
+    // until an entry has been returned.
+    var lastReturnedEntry;
+
+    // Use this value to scale all new requests against the first
+    // recorded request in the har, so that the first new incoming
+    // request "occurs" at the time of the first request in the HAR.
+    var minRequestTS = unreturnedEntries[0].request.receivedTS;
+
+    // Time stamp of the last request recorded in the HAR, used to
+    // more highly weigh responses that occur closer to incoming
+    // new requests.
+    var maxRequestTS = unreturnedEntries[numEntries - 1].request.receivedTS;
+
+    // Array of entries that have already been returned to the client.
+    // Will be a subset of all entries that occur in the HAR file. 
     var returnedEntires = [];
+
+    var bestEntryForRequestInCollectionBound = bestEntryForRequestInCollection.bind(
+        undefined,
+        maxRequestTS
+    );
 
     return {
         bestEntryForRequest: function (request) {
+            request.parsedUrl = URL.parse(request.url, true);
+            console.log("Determining match for request: " + request.url);
 
             // First select the best un-returned match from the collection.
             // If we can't find any matches in this collection, then use
             // the best possible match from the collection of
             // already returned entries.
-            var [bestEntry, bestEntryIndex] = bestEntryForRequestInCollection(request, unreturnedEntries);
+            var [bestEntry, bestEntryIndex] = bestEntryForRequestInCollectionBound(
+                lastReturnedEntry,
+                request,
+                unreturnedEntries
+            );
 
             if (bestEntry !== undefined) {
                 // Remove the now-being-returned entry from the "not-yet returned"
                 // array, and move it to the "has been returned" array.
                 unreturnedEntries.splice(bestEntryIndex, 1);
                 returnedEntires.push(bestEntry);
+                lastReturnedEntry = bestEntry;
+                console.log(" - Returning content: " + bestEntry);
                 return bestEntry;
             }
 
-            [bestEntry, bestEntryIndex] = bestEntryForRequestInCollection(request, returnedEntires);
+            [bestEntry, bestEntryIndex] = bestEntryForRequestInCollectionBound(
+                lastReturnedEntry,
+                request,
+                returnedEntires
+            );
+            lastReturnedEntry = bestEntry || lastReturnedEntry;
+            console.log(" - Returning content: " + bestEntry);
             return bestEntry;
         },
     };

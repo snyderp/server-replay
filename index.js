@@ -23,6 +23,13 @@ var heuristic = require("./heuristic");
 
 exports = module.exports = serverReplay;
 function serverReplay(har, options) {
+    if (options.debug) {
+        console.debug("Will respond to requests for the following URLS:");
+        har.log.entries.forEach(entry => {
+            console.debug(" * " + entry.request.url);
+        });
+        console.debug("\n");
+    }
     var server = http.createServer(makeRequestListener(har.log.entries, options));
 
     server.listen(options.port);
@@ -40,10 +47,10 @@ function makeRequestListener(entries, options) {
     var heuristicGusser = heuristic.makeHeuristicGuesser(entries);
 
     return function (request, response) {
+        console.log("something...");
         if (debug) {
-            console.log(request.method, request.url);
+            console.debug(request.method, request.url);
         }
-        request.parsedUrl = URL.parse(request.url, true);
 
         var entry = heuristicGusser.bestEntryForRequest(request);
 
