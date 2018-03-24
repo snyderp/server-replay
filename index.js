@@ -110,7 +110,7 @@ function makeRequestListener(entries, options) {
             console.debug(request.method, request.url);
         }
 
-        var entry = heuristicGusser(request);
+        var entry = heuristicGusser.bestEntryForRequest(request);
 
         var localPath;
         for (var i = 0; i < config.mappings.length; i++) {
