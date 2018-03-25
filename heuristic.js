@@ -23,7 +23,7 @@ function rate(maxTime, lastReturnedEntry, entry, request) {
 
     // method, host and pathname must match
     if (
-        entryRequest.method !== request.method ||
+        request.method !== entryRequest.method ||
         (request.parsedUrl.host !== null && entryRequest.parsedUrl.host !== request.parsedUrl.host) ||
         entryRequest.parsedUrl.pathname !== request.parsedUrl.pathname
     ) {
@@ -41,7 +41,7 @@ function rate(maxTime, lastReturnedEntry, entry, request) {
             if (entryQuery[name] === undefined) {
                 points -= 0.5;
             } else {
-                points += stripProtocol(entryQuery[name]) === stripProtocol(requestQuery[name]) ? 1 : 0;
+                points += entryQuery[name] === requestQuery[name] ? 1 : 0;
             }
         }
 
@@ -63,7 +63,7 @@ function rate(maxTime, lastReturnedEntry, entry, request) {
     }
 
     // Favor entries that happened as soon as possible after the last
-    // entry that was returned.  Award [-1, 3] points: -1 if the
+    // entry that was returned.  Award [-0.5, 3] points: -0.5 if the
     // considered entry occured before the request, and between [3, 0],
     // linerally scaled, for how long after the request the occured
     // (3 points for the entry being returned after the last response,
@@ -71,12 +71,14 @@ function rate(maxTime, lastReturnedEntry, entry, request) {
     // If we've never returned an entry, then ignore this check.
     //
     // @todo consider other scaling systems, this is a lot of guesses...
+    var tsDiff;
+    var tsDiffRange;
     if (lastReturnedEntry !== undefined) {
         if (entry.receivedTS < lastReturnedEntry.receivedTS) {
-            points -= 1;
+            points -= 0.5;
         } else {
-            var tsDiff = entry.receivedTS - lastReturnedEntry.receivedTS;
-            var tsDiffRange = maxTime - lastReturnedEntry.receivedTS;
+            tsDiff = entry.receivedTS - lastReturnedEntry.receivedTS;
+            tsDiffRange = maxTime - lastReturnedEntry.receivedTS;
             points += (tsDiff / tsDiffRange) * 3;
         }    
     }
@@ -140,15 +142,10 @@ function makeHeuristicGuesser(entries) {
     // until an entry has been returned.
     var lastReturnedEntry;
 
-    // Use this value to scale all new requests against the first
-    // recorded request in the har, so that the first new incoming
-    // request "occurs" at the time of the first request in the HAR.
-    var minRequestTS = unreturnedEntries[0].request.receivedTS;
-
     // Time stamp of the last request recorded in the HAR, used to
     // more highly weigh responses that occur closer to incoming
     // new requests.
-    var maxRequestTS = unreturnedEntries[numEntries - 1].request.receivedTS;
+    var maxRequestTS = unreturnedEntries[numEntries - 1].receivedTS;
 
     // Array of entries that have already been returned to the client.
     // Will be a subset of all entries that occur in the HAR file. 
@@ -162,7 +159,6 @@ function makeHeuristicGuesser(entries) {
     return {
         bestEntryForRequest: function (request) {
             request.parsedUrl = URL.parse(request.url, true);
-            console.log("Determining match for request: " + request.url);
 
             // First select the best un-returned match from the collection.
             // If we can't find any matches in this collection, then use
@@ -180,7 +176,6 @@ function makeHeuristicGuesser(entries) {
                 unreturnedEntries.splice(bestEntryIndex, 1);
                 returnedEntires.push(bestEntry);
                 lastReturnedEntry = bestEntry;
-                console.log(" - Returning content: " + bestEntry);
                 return bestEntry;
             }
 
@@ -190,7 +185,6 @@ function makeHeuristicGuesser(entries) {
                 returnedEntires
             );
             lastReturnedEntry = bestEntry || lastReturnedEntry;
-            console.log(" - Returning content: " + bestEntry);
             return bestEntry;
         },
     };

@@ -27,7 +27,7 @@ exports = module.exports = serverReplay;
 function serverReplay(har, options) {
     if (options.debug) {
         console.debug("Will respond to requests for the following URLS:");
-        har.log.entries.forEach(entry => {
+        har.log.entries.forEach(function (entry) {
             console.debug(" * " + entry.request.url);
         });
         console.debug("\n");
@@ -78,13 +78,10 @@ function chooseProtocol(options, connection) {
     });
 }
 
-<<<<<<< HEAD
-=======
 function handleProxyError(err) {
     console.warn("An error occurred while proxying:");
     console.warn(err.stack);
 }
->>>>>>> Gracefully handle connection reset errors on the proxy
 
 function bridgeConnection(buf, connection, destPort) {
     var proxy = net.createConnection(destPort, function () {
@@ -105,7 +102,6 @@ function makeRequestListener(entries, options) {
     var heuristicGusser = heuristic.makeHeuristicGuesser(entries);
 
     return function (request, response) {
-        console.log("something...");
         if (debug) {
             console.debug(request.method, request.url);
         }
