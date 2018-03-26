@@ -100,7 +100,9 @@ function rate(maxTime, lastReturnedEntry, entry, request) {
     // and otherwise 0.
     var entryCookies = entryRequest.cookies;
     var requestCookies = request.cookies;
-    if (areAllCookiesIdentical(entryCookies, requestCookies)) {
+    if (entryCookies &&
+            requestCookies &&
+            areAllCookiesIdentical(entryCookies, requestCookies)) {
         points += 2;
     }
 
