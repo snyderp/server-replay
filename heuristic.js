@@ -39,6 +39,49 @@ module.exports = function (entries, request) {
     return topEntry;
 };
 
+function isCookieIdentical(cookie1, cookie2) {
+    var cookie1Keys = Object.keys(cookie1);
+    var cookie2Keys = Object.keys(cookie2);
+
+    if (cookie1Keys.length !== cookie2Keys.length) {
+        return false;
+    }
+
+    return cookie1Keys.every(function (cookieField) {
+        return cookie1[cookieField] === cookie2[cookieField];
+    });
+};
+
+function indexCookies(cookieArray) {
+    return cookieArray.reduce(function (collection, item) {
+        collection[item.name] = item;
+        return collection;
+    }, Object.create(null));
+};
+
+function areAllCookiesIdentical(cookieArray1, cookieArray2) {
+    if (cookieArray1.length !== cookieArray2.length) {
+        return false;
+    }
+
+    var cookieArray1Indexed = indexCookies(cookieArray1);
+    var cookieArray2Indexed = indexCookies(cookieArray2);
+
+    return Object.keys(cookieArray1Indexed).every(function (cookieName)  {
+
+        var cookie2 = cookieArray2Indexed[cookieName];
+
+        if (cookie2 === undefined) {
+            return false;
+        }
+
+        return isCookieIdentical(
+            cookieArray1Indexed[cookieName],
+            cookie2
+        );
+    });
+};
+
 function rate(entryRequest, request) {
     var points = 0;
     var name;
@@ -74,10 +117,25 @@ function rate(entryRequest, request) {
         }
     }
 
+    // Prefer responses where cookies match between the new request, and the
+    // considered request in the HAR.  "Award" 2 points if all cookies match,
+    // and otherwise 0.
+    var entryCookies = entryRequest.cookies;
+    var requestCookies = request.cookies;
+    if (entryCookies &&
+            requestCookies &&
+            areAllCookiesIdentical(entryCookies, requestCookies)) {
+        points += 2;
+    }
+
     // each header
     var entryHeaders = entryRequest.indexedHeaders;
     var requestHeaders = request.headers;
     for (name in requestHeaders) {
+        // Don't double count cookies, since they're dealt with above.
+        if (name === "cookie") {
+            continue;
+        }
         if (entryHeaders[name]) {
             points += stripProtocol(entryHeaders[name]) === stripProtocol(requestHeaders[name]) ? 1 : 0;
         }
