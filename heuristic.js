@@ -15,47 +15,25 @@
  */
 
 var URL = require("url");
-
-function isCookieIdentical(cookie1, cookie2) {
-    var cookie1Keys = Object.keys(cookie1);
-    var cookie2Keys = Object.keys(cookie2);
-
-    if (cookie1Keys.length !== cookie2Keys.length) {
-        return false;
-    }
-
-    return cookie1Keys.every(function (cookieField) {
-        return cookie1[cookieField] === cookie2[cookieField];
-    });
-};
+var cookieParser = require("cookie");
 
 function indexCookies(cookieArray) {
     return cookieArray.reduce(function (collection, item) {
-        collection[item.name] = item;
+        collection[item.name] = item.value;
         return collection;
     }, Object.create(null));
 };
 
-function areAllCookiesIdentical(cookieArray1, cookieArray2) {
-    if (cookieArray1.length !== cookieArray2.length) {
+function areAllCookiesIdentical(cookies1, cookies2) {
+    var cookies1Names = Object.keys(cookies1);
+    var cookies2Names = Object.keys(cookies2);
+
+    if (cookies1Names.length !== cookies2Names) {
         return false;
     }
 
-    var cookieArray1Indexed = indexCookies(cookieArray1);
-    var cookieArray2Indexed = indexCookies(cookieArray2);
-
-    return Object.keys(cookieArray1Indexed).every(function (cookieName)  {
-
-        var cookie2 = cookieArray2Indexed[cookieName];
-
-        if (cookie2 === undefined) {
-            return false;
-        }
-
-        return isCookieIdentical(
-            cookieArray1Indexed[cookieName],
-            cookie2
-        );
+    return cookies1Names.every(function (cookieName)  {
+        return cookies1[cookieName] === cookies2[cookieName];
     });
 };
 
@@ -98,12 +76,14 @@ function rate(maxTime, lastReturnedEntry, entry, request) {
     // Prefer responses where cookies match between the new request, and the
     // considered request in the HAR.  "Award" 2 points if all cookies match,
     // and otherwise 0.
-    var entryCookies = entryRequest.cookies;
-    var requestCookies = request.cookies;
-    if (entryCookies &&
-            requestCookies &&
-            areAllCookiesIdentical(entryCookies, requestCookies)) {
-        points += 2;
+    if (request.header.cookie) {
+        var entryCookies = indexCookies(entryRequest.cookies);
+        var requestCookies = cookieParser.parse(request.header.cookie);
+        if (entryCookies &&
+                requestCookies &&
+                areAllCookiesIdentical(entryCookies, requestCookies)) {
+            points += 2;
+        }
     }
 
     // each header
